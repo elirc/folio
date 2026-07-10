@@ -41,3 +41,45 @@ export function resolveRelativeAnchor(doc: Y.Doc, encoded: string): number | nul
   const abs = Y.createAbsolutePositionFromRelativePosition(rel, doc);
   return abs ? abs.index : null;
 }
+
+/**
+ * S13 — HARVEST OF FLAW #3 (part 2). Relative positions (S09) handle *edits* around an anchor. But when the
+ * anchored text is DELETED ENTIRELY, there's no identity left to resolve — the happy path returns a
+ * boundary/null and the comment would silently point at the wrong place or vanish. The fix is a layered
+ * fallback: try the relative position; if it can't resolve to the anchored text, FUZZY-MATCH the original
+ * quoted text in the current document; if even that fails, mark the comment ORPHANED (shown detached, not
+ * lost). 🔗 The S09 debate's resolution: relative positions primary, fuzzy match as the fallback for the one
+ * case they can't handle.
+ */
+export type AnchorResolution =
+  | { status: "anchored"; index: number }
+  | { status: "fuzzy"; index: number }
+  | { status: "orphaned" };
+
+export function resolveAnchorWithFallback(doc: Y.Doc, encoded: string, quotedText: string, text: string): AnchorResolution {
+  const index = resolveRelativeAnchor(doc, encoded);
+  // The relative anchor resolved AND the quoted text is still there → precise anchor.
+  if (index !== null && quotedText && text.slice(index, index + quotedText.length) === quotedText) {
+    return { status: "anchored", index };
+  }
+  // Fuzzy fallback: find the quoted text elsewhere (nearest occurrence to the last-known index).
+  if (quotedText) {
+    const fuzzy = nearestOccurrence(text, quotedText, index ?? 0);
+    if (fuzzy !== -1) return { status: "fuzzy", index: fuzzy };
+  }
+  // The anchored content is gone entirely → orphan the comment (detached, not deleted).
+  return { status: "orphaned" };
+}
+
+/** The occurrence of `needle` in `text` closest to `near` (or -1 if absent). */
+function nearestOccurrence(text: string, needle: string, near: number): number {
+  let best = -1;
+  let from = 0;
+  for (;;) {
+    const i = text.indexOf(needle, from);
+    if (i === -1) break;
+    if (best === -1 || Math.abs(i - near) < Math.abs(best - near)) best = i;
+    from = i + 1;
+  }
+  return best;
+}

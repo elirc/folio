@@ -25,6 +25,8 @@ interface Room {
 export class YRooms {
   private readonly rooms = new Map<string, Room>();
   private readonly socketDoc = new Map<WebSocket, string>();
+  /** Per-socket edit permission — re-checked on EVERY mutating message, not just at connect (flaw #5 fix). */
+  private readonly canEditSocket = new Map<WebSocket, boolean>();
 
   constructor(
     /** Load a doc's persisted Yjs update (from the DB log/snapshot). Returns null for a brand-new doc. */
@@ -33,7 +35,8 @@ export class YRooms {
     private readonly onPersist: (docId: string, update: Uint8Array) => void,
   ) {}
 
-  async join(docId: string, socket: WebSocket): Promise<Y.Doc> {
+  async join(docId: string, socket: WebSocket, canEdit = true): Promise<Y.Doc> {
+    this.canEditSocket.set(socket, canEdit);
     let room = this.rooms.get(docId);
     if (!room) {
       const doc = new Y.Doc();
@@ -52,6 +55,15 @@ export class YRooms {
     return room.doc;
   }
 
+  /**
+   * Re-authorize a socket mid-session. When a member's ACL changes (demoted to viewer), the server updates
+   * their live socket's edit permission — so the NEXT update message they send is rejected. Harvest of flaw
+   * #5: a WebSocket outlives a permission change, so authorization must follow the change onto the wire.
+   */
+  setCanEdit(socket: WebSocket, canEdit: boolean): void {
+    this.canEditSocket.set(socket, canEdit);
+  }
+
   /** Handle one wire message from a socket. */
   handle(socket: WebSocket, msg: WireMessage): void {
     const docId = this.socketDoc.get(socket);
@@ -60,9 +72,22 @@ export class YRooms {
     if (!room) return;
 
     if (isSyncMessage(msg)) {
+      // ⚠️ FLAW #5 FIX — per-message authorization. A MUTATING message (sync2 = my delta, update = a new
+      // change) is only applied if this socket STILL has edit permission RIGHT NOW. Authorizing at connect
+      // was not enough: a socket outlives the permission that admitted it, so a user demoted mid-session
+      // could keep editing on their open socket. sync1 (a read/state-vector request) is always allowed.
+      const mutating = msg.type === "sync2" || msg.type === "update";
+      if (mutating && this.canEditSocket.get(socket) !== true) {
+        return; // silently drop unauthorized edits — the demoted user's socket can no longer write
+      }
       // Tag the origin as this socket so the doc.on('update') relay doesn't echo it back to the sender.
-      const reply = readSyncMessage(room.doc, msg, socket);
-      if (reply) this.sendTo(socket, reply);
+      // Wrapped so a MALFORMED update from a client can't crash the room (untrusted-input discipline, S13).
+      try {
+        const reply = readSyncMessage(room.doc, msg, socket);
+        if (reply) this.sendTo(socket, reply);
+      } catch {
+        /* quarantine: a garbage update is dropped, the live doc + server stay intact */
+      }
     } else {
       // Awareness: relay to everyone else; never touch the doc.
       this.broadcast(docId, msg, socket);
@@ -72,6 +97,7 @@ export class YRooms {
   leave(socket: WebSocket): void {
     const docId = this.socketDoc.get(socket);
     this.socketDoc.delete(socket);
+    this.canEditSocket.delete(socket);
     if (!docId) return;
     const room = this.rooms.get(docId);
     room?.sockets.delete(socket);

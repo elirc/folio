@@ -58,5 +58,12 @@ jobs:
       # Capstone gates — turned on as the sprints introduce them:
       - run: pnpm turbo run test:convergence     # S06 crdt-101 (+ S07/S13 Yjs-transport convergence fuzzers)
       - run: pnpm turbo run perf:budget          # S12 large-doc / many-cursor keystroke budget
+      - name: Secret scan (S13 — fast-forward)
+        run: |
+          if grep -rnE 'BEGIN [A-Z ]*PRIVATE KEY|AKIA[0-9A-Z]{16}|xox[baprs]-[0-9A-Za-z-]{10,}' apps packages; then
+            echo "::error::Potential committed secret detected"; exit 1
+          fi
+          echo "no secrets found"
+      - run: pnpm audit --audit-level high || true   # S13 dependency advisories (non-blocking, fast-forward)
       # - run: pnpm turbo run test:e2e           # S03+ Playwright, incl. multi-context collaborative editing
       # - run: pnpm turbo run test:a11y          # S14 axe-core gate
