@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { type PresenceUser } from "@folio/collab";
 import { ProseMirrorView } from "./editor/ProseMirrorView";
+import { CommentsPanel } from "./editor/CommentsPanel";
 import { localUser } from "./editor/collab";
 
 /**
@@ -14,6 +15,7 @@ import { localUser } from "./editor/collab";
 export function Editor({ docId }: { docId: string }) {
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   const [online, setOnline] = useState(true);
+  const [anchor, setAnchor] = useState<string | null>(null);
   const user = useMemo<PresenceUser>(() => localUser(), []);
 
   return (
@@ -30,11 +32,23 @@ export function Editor({ docId }: { docId: string }) {
           {online ? "● online" : "○ offline — editing locally, will merge"}
         </span>
       </div>
-      <ProseMirrorView key={docId} docId={docId} user={user} onPresence={setPresence} onStatus={(s) => setOnline(s.online)} />
-      <p style={hint}>
-        Offline-first (Yjs + IndexedDB). Edit with no connection; reconnect and it merges — no lost work, no
-        conflict dialog. Open two windows to watch cursors track and edits converge.
-      </p>
+      <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <ProseMirrorView
+            key={docId}
+            docId={docId}
+            user={user}
+            onPresence={setPresence}
+            onStatus={(s) => setOnline(s.online)}
+            onSelectionAnchor={setAnchor}
+          />
+          <p style={hint}>
+            Real-time + offline (Yjs). Comments anchor to the text and follow it through everyone's edits
+            (relative positions). Select text to comment; suggestions ride the CRDT as tracked-change marks.
+          </p>
+        </div>
+        <CommentsPanel docId={docId} author={user.name} selectionAnchor={anchor} />
+      </div>
     </div>
   );
 }

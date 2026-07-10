@@ -2,9 +2,10 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { EditorView } from "prosemirror-view";
 import { EditorState } from "prosemirror-state";
 import { keymap } from "prosemirror-keymap";
-import { ySyncPlugin, yCursorPlugin, yUndoPlugin, undo, redo } from "y-prosemirror";
+import * as Y from "yjs";
+import { ySyncPlugin, yCursorPlugin, yUndoPlugin, undo, redo, ySyncPluginKey, absolutePositionToRelativePosition } from "y-prosemirror";
 import { folioSchema, folioEditingPlugins, filterSlashItems, insertImage, type SlashItem } from "@folio/editor";
-import { type PresenceUser } from "@folio/collab";
+import { toB64, type PresenceUser } from "@folio/collab";
 import { blockHandlesPlugin } from "./blockHandles";
 import { createCollab, type CollabSession } from "./collab";
 import { uploadImage } from "../lib/api";
@@ -24,6 +25,8 @@ export function ProseMirrorView(props: {
   user: PresenceUser;
   onPresence?: (users: PresenceUser[]) => void;
   onStatus?: (status: { online: boolean }) => void;
+  /** Called on selection change with the encoded RELATIVE anchor for the current selection (null if empty). */
+  onSelectionAnchor?: (anchor: string | null) => void;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -55,6 +58,7 @@ export function ProseMirrorView(props: {
       dispatchTransaction(tr) {
         view.updateState(view.state.apply(tr));
         updateSlash(view);
+        if (props.onSelectionAnchor) props.onSelectionAnchor(encodeSelectionAnchor(view, collab.fragment));
       },
       // Image paste/drop → upload → insert (unchanged from S04; the collab layer is orthogonal).
       handlePaste(v, event) {
@@ -143,6 +147,20 @@ export function ProseMirrorView(props: {
       )}
     </div>
   );
+}
+
+/**
+ * Encode the current selection as a Yjs RELATIVE position (S09). Maps the ProseMirror position to the Y
+ * fragment via y-prosemirror's binding, so the anchor tracks CRDT identity — it survives concurrent edits
+ * (flaw #3's fix). Returns null for an empty selection or before the binding is ready.
+ */
+function encodeSelectionAnchor(view: EditorView, fragment: Y.XmlFragment): string | null {
+  const { from, empty } = view.state.selection;
+  if (empty) return null;
+  const binding = ySyncPluginKey.getState(view.state)?.binding;
+  if (!binding) return null;
+  const rel = absolutePositionToRelativePosition(from, fragment, binding.mapping);
+  return toB64(Y.encodeRelativePosition(rel));
 }
 
 /** First image file in a FileList, if any. */

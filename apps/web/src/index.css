@@ -109,3 +109,13 @@ body {
 .ProseMirror-yjs-selection {
   opacity: 0.35;
 }
+/* S09 suggestion mode (tracked changes as marks) */
+.folio-sugg-ins {
+  color: #2fbf71;
+  text-decoration: underline;
+  text-decoration-color: rgba(47, 191, 113, 0.6);
+}
+.folio-sugg-del {
+  color: #e6584d;
+  text-decoration: line-through;
+}
