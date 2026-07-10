@@ -23,6 +23,7 @@ export function ProseMirrorView(props: {
   docId: string;
   user: PresenceUser;
   onPresence?: (users: PresenceUser[]) => void;
+  onStatus?: (status: { online: boolean }) => void;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -36,6 +37,7 @@ export function ProseMirrorView(props: {
     const collab = createCollab(props.docId, props.user);
     collabRef.current = collab;
     if (props.onPresence) collab.onPresence(props.onPresence);
+    if (props.onStatus) collab.onStatus(props.onStatus);
 
     const state = EditorState.create({
       schema: folioSchema,
