@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:convergence": "vitest run convergence",
+    "perf:budget": "vitest run perf",
     "lint": "eslint src"
   },
   "dependencies": {
