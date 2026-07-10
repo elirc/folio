@@ -1,38 +1,19 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { apiGet, apiSend } from "./lib/api";
+import { useMemo, useState, type CSSProperties } from "react";
+import { type PresenceUser } from "@folio/collab";
 import { ProseMirrorView } from "./editor/ProseMirrorView";
-import { localUser, type SyncUser } from "./editor/syncClient";
+import { localUser } from "./editor/collab";
 
 /**
- * The editor (S05). Now MULTIPLAYER — but naively: whole-document broadcast with last-write-wins (flaw #1,
- * announced). Open this doc in two windows and edit both: watch one window's paragraph vanish. That data
- * loss is the felt problem S06 (toy CRDT) and S07 (Yjs) exist to solve. Presence + cursors are best-effort
- * and also break under concurrency (cursors jump — absolute offsets, ADR-0006).
+ * The editor (S07). Real collaboration, at last. The document is a **Yjs CRDT** bound to ProseMirror; the
+ * server holds the authoritative Y.Doc, persists the update log, and relays updates + awareness. There is no
+ * client-side whole-doc save anymore — every keystroke is an incremental CRDT update, and persistence is the
+ * server appending to the log. The S05 paragraph that vanished now survives (ADR-0008).
  *
- * ⚠️ SAVE IS STILL DEBOUNCED WHOLE-DOCUMENT (persistence) AND BROADCAST IS WHOLE-DOCUMENT LWW (sync). Both
- * are the same naïveté at two layers; S07 replaces both with a Yjs update log.
+ * Presence + cursors ride the awareness channel (ephemeral) — never the doc log.
  */
 export function Editor({ docId }: { docId: string }) {
-  const [initialJSON, setInitialJSON] = useState<unknown | undefined>(undefined);
-  const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [presence, setPresence] = useState<SyncUser[]>([]);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const user = useMemo<SyncUser>(() => localUser(), []);
-
-  useEffect(() => {
-    setInitialJSON(undefined);
-    setPresence([]);
-    apiGet<{ text: string }>(`/api/docs/${docId}`).then((d) => setInitialJSON(parseMaybeJSON(d.text)));
-  }, [docId]);
-
-  const scheduleSave = (json: unknown) => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      void apiSend(`/api/docs/${docId}`, "PUT", { text: JSON.stringify(json) }).then(() =>
-        setSavedAt(new Date().toLocaleTimeString()),
-      );
-    }, 600); // debounce: coalesce a burst of keystrokes into one whole-doc write
-  };
+  const [presence, setPresence] = useState<PresenceUser[]>([]);
+  const user = useMemo<PresenceUser>(() => localUser(), []);
 
   return (
     <div style={{ marginTop: 4 }}>
@@ -44,33 +25,13 @@ export function Editor({ docId }: { docId: string }) {
         ))}
         {presence.length > 0 && <span style={{ color: "#7c8794", fontSize: 12 }}>{presence.length} here</span>}
       </div>
-      {initialJSON !== undefined && (
-        <ProseMirrorView
-          docId={docId}
-          initialJSON={initialJSON}
-          user={user}
-          onChange={scheduleSave}
-          onPresence={setPresence}
-        />
-      )}
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 8 }}>
-        {savedAt && <span style={{ color: "#8b93a1", fontSize: 12 }}>saved {savedAt}</span>}
-        <span style={hint}>
-          Multiplayer (naive, S05): open two windows and watch last-write-wins eat a paragraph. Real
-          convergence arrives S06–S07 (ADR-0002/0006).
-        </span>
-      </div>
+      <ProseMirrorView key={docId} docId={docId} user={user} onPresence={setPresence} />
+      <p style={hint}>
+        Real-time collaboration (Yjs). Open two windows and edit together — both edits survive, cursors track.
+        The S05 last-write-wins clobber is gone for good.
+      </p>
     </div>
   );
-}
-
-function parseMaybeJSON(text: string): unknown {
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text; // an old plaintext row — docFromJSON migrates it
-  }
 }
 
 const presenceBar: CSSProperties = { display: "flex", gap: 6, alignItems: "center", minHeight: 24, marginBottom: 6 };
@@ -85,4 +46,4 @@ const avatar: CSSProperties = {
   fontSize: 12,
   fontWeight: 600,
 };
-const hint: CSSProperties = { color: "#5b6572", fontSize: 12 };
+const hint: CSSProperties = { color: "#5b6572", fontSize: 12, marginTop: 8 };
