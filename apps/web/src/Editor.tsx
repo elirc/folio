@@ -1,7 +1,8 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { type PresenceUser } from "@folio/collab";
 import { ProseMirrorView } from "./editor/ProseMirrorView";
 import { CommentsPanel } from "./editor/CommentsPanel";
+import { VersionHistory } from "./editor/VersionHistory";
 import { localUser } from "./editor/collab";
 
 /**
@@ -16,6 +17,8 @@ export function Editor({ docId }: { docId: string }) {
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   const [online, setOnline] = useState(true);
   const [anchor, setAnchor] = useState<string | null>(null);
+  const [panel, setPanel] = useState<"comments" | "history">("comments");
+  const restoreRef = useRef<((b64: string) => void) | null>(null);
   const user = useMemo<PresenceUser>(() => localUser(), []);
 
   return (
@@ -41,13 +44,28 @@ export function Editor({ docId }: { docId: string }) {
             onPresence={setPresence}
             onStatus={(s) => setOnline(s.online)}
             onSelectionAnchor={setAnchor}
+            onCollabReady={(api) => (restoreRef.current = api.restoreFromBase64)}
           />
           <p style={hint}>
-            Real-time + offline (Yjs). Comments anchor to the text and follow it through everyone's edits
-            (relative positions). Select text to comment; suggestions ride the CRDT as tracked-change marks.
+            Real-time + offline (Yjs). The sync log IS the history — save a version, then time-travel. Restore
+            applies an old version forward (never a destructive rewind), so collaborators stay converged.
           </p>
         </div>
-        <CommentsPanel docId={docId} author={user.name} selectionAnchor={anchor} />
+        <div style={{ width: 260, flexShrink: 0 }}>
+          <div style={tabs}>
+            <button style={{ ...tab, ...(panel === "comments" ? tabActive : {}) }} onClick={() => setPanel("comments")}>
+              Comments
+            </button>
+            <button style={{ ...tab, ...(panel === "history" ? tabActive : {}) }} onClick={() => setPanel("history")}>
+              History
+            </button>
+          </div>
+          {panel === "comments" ? (
+            <CommentsPanel docId={docId} author={user.name} selectionAnchor={anchor} />
+          ) : (
+            <VersionHistory docId={docId} onRestore={(b64) => restoreRef.current?.(b64)} />
+          )}
+        </div>
       </div>
     </div>
   );
@@ -69,3 +87,6 @@ const hint: CSSProperties = { color: "#5b6572", fontSize: 12, marginTop: 8 };
 const statusPill: CSSProperties = { marginLeft: "auto", fontSize: 11, padding: "2px 8px", borderRadius: 999 };
 const onlinePill: CSSProperties = { background: "rgba(47,191,113,.15)", color: "#2fbf71" };
 const offlinePill: CSSProperties = { background: "rgba(224,165,75,.15)", color: "#e0a54b" };
+const tabs: CSSProperties = { display: "flex", gap: 4, borderLeft: "1px solid #232a32", padding: "0 12px 6px" };
+const tab: CSSProperties = { flex: 1, background: "transparent", color: "#7c8794", border: "1px solid #232a32", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontSize: 12 };
+const tabActive: CSSProperties = { color: "#7c5cff", borderColor: "#7c5cff" };

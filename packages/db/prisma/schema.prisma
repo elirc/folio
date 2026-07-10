@@ -53,8 +53,26 @@ model Node {
   docState    DocState?
   acls        Acl[]
   comments    Comment[]
+  versions    VersionSnapshot[]
 
   @@index([workspaceId, parentId])
+}
+
+// A point-in-time checkpoint of a document (S10). `yState` is a COMPACTED Yjs snapshot (one merged update),
+// so reconstructing a version is "apply this one blob" — not "replay a million keystroke-updates". Named
+// versions are user "save version" actions; automatic ones are periodic checkpoints. History is *free* from
+// the update log — the same log that syncs edits records their sequence. `seq` orders versions per node.
+model VersionSnapshot {
+  id        String   @id @default(cuid())
+  nodeId    String
+  node      Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  label     String? // set = named "save version"; null = automatic checkpoint
+  kind      String   @default("auto") // auto | named
+  yState    Bytes // compacted snapshot of the Y.Doc at this checkpoint
+  seq       Int // monotonic version sequence per node
+  createdAt DateTime @default(now())
+
+  @@index([nodeId, seq])
 }
 
 // A comment anchored to a range of the document (S09). The anchor is an ENCODED Yjs RELATIVE POSITION — it

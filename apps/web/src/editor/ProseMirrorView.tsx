@@ -5,7 +5,7 @@ import { keymap } from "prosemirror-keymap";
 import * as Y from "yjs";
 import { ySyncPlugin, yCursorPlugin, yUndoPlugin, undo, redo, ySyncPluginKey, absolutePositionToRelativePosition } from "y-prosemirror";
 import { folioSchema, folioEditingPlugins, filterSlashItems, insertImage, type SlashItem } from "@folio/editor";
-import { toB64, type PresenceUser } from "@folio/collab";
+import { toB64, fromB64, restoreAsUpdate, applyUpdate, type PresenceUser } from "@folio/collab";
 import { blockHandlesPlugin } from "./blockHandles";
 import { createCollab, type CollabSession } from "./collab";
 import { uploadImage } from "../lib/api";
@@ -27,6 +27,8 @@ export function ProseMirrorView(props: {
   onStatus?: (status: { online: boolean }) => void;
   /** Called on selection change with the encoded RELATIVE anchor for the current selection (null if empty). */
   onSelectionAnchor?: (anchor: string | null) => void;
+  /** Exposes collab actions (e.g. restore a version) once the Y.Doc is wired. */
+  onCollabReady?: (api: { restoreFromBase64: (b64: string) => void }) => void;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -41,6 +43,12 @@ export function ProseMirrorView(props: {
     collabRef.current = collab;
     if (props.onPresence) collab.onPresence(props.onPresence);
     if (props.onStatus) collab.onStatus(props.onStatus);
+    if (props.onCollabReady) {
+      props.onCollabReady({
+        // Restore a version: apply it FORWARD as a new update (CRDT-consistent, not a destructive rewind).
+        restoreFromBase64: (b64) => applyUpdate(collab.ydoc, restoreAsUpdate(collab.ydoc, fromB64(b64)), "remote"),
+      });
+    }
 
     const state = EditorState.create({
       schema: folioSchema,
