@@ -12,6 +12,7 @@
     "lint": "eslint src"
   },
   "dependencies": {
+    "@folio/crdt-101": "workspace:*",
     "@folio/editor": "workspace:*",
     "prosemirror-state": "^1.4.3",
     "prosemirror-view": "^1.34.3",

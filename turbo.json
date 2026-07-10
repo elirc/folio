@@ -10,6 +10,7 @@
       "dependsOn": ["^build"]
     },
     "test": {},
+    "test:convergence": {},
     "lint": {},
     "dev": {
       "cache": false,

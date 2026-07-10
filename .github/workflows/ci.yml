@@ -55,8 +55,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run lint
       - run: pnpm turbo run typecheck test build
-      # Capstone gates — turn on as the sprints introduce them:
-      # - run: pnpm turbo run test:convergence   # S06 crdt-101 + S07/S13 Yjs-transport convergence fuzzers
+      # Capstone gates — turned on as the sprints introduce them:
+      - run: pnpm turbo run test:convergence     # S06 crdt-101 (+ S07/S13 Yjs-transport convergence fuzzers)
       # - run: pnpm turbo run test:e2e           # S03+ Playwright, incl. multi-context collaborative editing
       # - run: pnpm turbo run perf:budget        # S12 large-doc / many-cursor budgets
       # - run: pnpm turbo run test:a11y          # S14 axe-core gate

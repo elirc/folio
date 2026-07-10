@@ -75,6 +75,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@folio/crdt-101':
+        specifier: workspace:*
+        version: link:../../packages/crdt-101
       '@folio/editor':
         specifier: workspace:*
         version: link:../../packages/editor
@@ -117,6 +120,21 @@ importers:
         version: 2.1.9(@types/node@22.20.1)
 
   packages/config: {}
+
+  packages/crdt-101:
+    devDependencies:
+      '@folio/config':
+        specifier: workspace:*
+        version: link:../config
+      fast-check:
+        specifier: ^3.22.0
+        version: 3.23.2
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.4
+        version: 2.1.9(@types/node@22.20.1)
 
   packages/db:
     dependencies:
