@@ -1,8 +1,9 @@
 // Prisma schema for Folio.
-// S01: the document skeleton — Node (a tree entry: doc | folder) + DocState (its content). The workspace
-// tree, ACL, and members arrive S02. DocState is PLAINTEXT for now; by S07 it becomes a Yjs update log +
-// periodic snapshots (ADR-0002's roadmap) — which is why the column is `text` on a `DocState` model, not
-// `content` on `Node`: it's built to grow into a CRDT changelog.
+// S01: the document skeleton — Node (doc | folder) + DocState (its content, plaintext for now).
+// S02: the workspace tree. Node gains a parent (self-relation) and a fractional `sortOrder` among
+// siblings; Workspace + Member add tenancy; Acl adds a first-cut per-node role (NO inheritance — that's
+// the S11 deep-dive, deliberately deferred). DocState is still PLAINTEXT; by S07 it becomes a Yjs update
+// log + snapshots (ADR-0002), which is why content lives on `DocState.text`, not `Node.content`.
 
 generator client {
   provider = "prisma-client-js"
@@ -13,13 +14,59 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  members   Member[]
+  nodes     Node[]
+}
+
+model Member {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  email       String
+  // Workspace-level default role. A per-node Acl can override it up or down for a specific node.
+  role        String    @default("editor") // owner | editor | commenter | viewer
+  createdAt   DateTime  @default(now())
+  acls        Acl[]
+
+  @@unique([workspaceId, email])
+}
+
 model Node {
-  id        String    @id @default(cuid())
-  type      String    @default("doc") // doc | folder
-  title     String    @default("Untitled")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  docState  DocState?
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  // Self-relation = the tree. parentId null ⇒ a workspace-root node. Cascade delete drops a whole subtree.
+  parentId    String?
+  parent      Node?     @relation("NodeChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Node[]    @relation("NodeChildren")
+  type        String    @default("doc") // doc | folder
+  title       String    @default("Untitled")
+  // Fractional index among siblings (ADR-0003). A move recomputes ONE key — no resequencing.
+  // Ported from Tracer S4's keyBetween; see packages/shared/src/order.ts and its rebalancing note.
+  sortOrder   String    @default("")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  docState    DocState?
+  acls        Acl[]
+
+  @@index([workspaceId, parentId])
+}
+
+// Per-node access grant. v1: a DIRECT role on a single node — it does NOT flow to descendants.
+// Inheritance (a folder's role cascading to everything inside it) is the whole subject of S11.
+model Acl {
+  id       String @id @default(cuid())
+  nodeId   String
+  node     Node   @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  memberId String
+  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  role     String // owner | editor | commenter | viewer
+
+  @@unique([nodeId, memberId])
 }
 
 model DocState {
