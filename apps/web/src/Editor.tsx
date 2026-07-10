@@ -40,7 +40,10 @@ export function Editor({ docId }: { docId: string }) {
       {initialJSON !== undefined && <ProseMirrorView initialJSON={initialJSON} onChange={scheduleSave} />}
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 8 }}>
         {savedAt && <span style={{ color: "#8b93a1", fontSize: 12 }}>saved {savedAt}</span>}
-        <span style={hint}>Type “/” for blocks · **bold** · # heading · - list. Single-user until S05.</span>
+        <span style={hint}>
+          “/” blocks · **bold** · # heading · - list · Tab to nest · ⌘. to fold · paste/drop an image.
+          Single-user until S05.
+        </span>
       </div>
     </div>
   );

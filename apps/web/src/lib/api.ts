@@ -23,3 +23,15 @@ export async function apiSend<T>(path: string, method: Method, body?: unknown): 
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
+
+/** Upload an image file to the StorageService-backed endpoint (S04); returns its public URL. */
+export async function uploadImage(file: File | Blob): Promise<string> {
+  const res = await fetch(`${BASE}/api/uploads`, {
+    method: "POST",
+    headers: { "content-type": file.type || "application/octet-stream" },
+    body: file,
+  });
+  if (!res.ok) throw new Error(`upload → ${res.status}`);
+  const body = (await res.json()) as { url: string };
+  return body.url;
+}

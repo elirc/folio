@@ -63,3 +63,24 @@ body {
 .folio-editor a {
   color: #7c5cff;
 }
+.folio-editor img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 0.5em 0;
+}
+/* S04 block drag handle: a gutter grip that appears on hover. */
+.folio-block-handle {
+  position: absolute;
+  left: -18px;
+  color: #4b5563;
+  cursor: grab;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.folio-editor .ProseMirror > * {
+  position: relative;
+}
+.folio-editor .ProseMirror > *:hover > .folio-block-handle {
+  opacity: 1;
+}
