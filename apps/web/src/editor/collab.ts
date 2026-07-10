@@ -1,4 +1,5 @@
 import * as Y from "yjs";
+import { IndexeddbPersistence } from "y-indexeddb";
 import { encodeAwarenessUpdate, applyAwarenessUpdate } from "y-protocols/awareness";
 import {
   Provider,
@@ -14,15 +15,19 @@ import {
 import { WS_URL } from "../lib/api";
 
 /**
- * The browser collaboration session (S07): one Y.Doc per open document, wired to the server through our
- * CUSTOM provider over a WebSocket. Document sync flows through the Provider (sync1/sync2/update); presence
- * flows through the awareness channel (ephemeral). We route incoming frames to the right handler.
+ * The browser collaboration session (S07→S08): one Y.Doc per open document. It is now OFFLINE-FIRST:
+ *  1. IndexedDB persistence boots the Y.Doc FROM DISK before we touch the network (🔗 Tracer S7 boot-from-
+ *     disk ordering) — the doc is editable instantly, even with no connection.
+ *  2. Our custom provider syncs it with the server when online; while offline, edits accumulate in the Y.Doc
+ *     and, on reconnect, the SV-exchange sends only the delta (no full resend). No merge dialog: the CRDT
+ *     already converged.
  */
 export interface CollabSession {
   ydoc: Y.Doc;
   fragment: Y.XmlFragment;
   awareness: ReturnType<typeof createAwareness>;
   onPresence: (cb: (users: PresenceUser[]) => void) => void;
+  onStatus: (cb: (status: { online: boolean }) => void) => void;
   destroy: () => void;
 }
 
@@ -45,10 +50,20 @@ export function createCollab(docId: string, user: PresenceUser): CollabSession {
   const awareness = createAwareness(ydoc);
   setLocalPresence(awareness, user);
 
+  // OFFLINE-FIRST: boot the doc from IndexedDB before the network. The editor is usable immediately, and any
+  // edits made while offline are already in the Y.Doc — reconnection is just a sync, never a "merge".
+  const idb = new IndexeddbPersistence(`folio-${docId}`, ydoc);
+
   let ws: WebSocket | null = null;
   let closed = false;
+  let online = false;
+  let statusCb: (s: { online: boolean }) => void = () => {};
   let syncCb: (m: SyncMessage) => void = () => {};
   let openCb: () => void = () => {};
+  const setOnline = (v: boolean) => {
+    online = v;
+    statusCb({ online });
+  };
 
   const wsSend = (m: WireMessage) => {
     if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
@@ -71,7 +86,10 @@ export function createCollab(docId: string, user: PresenceUser): CollabSession {
 
   const connect = () => {
     ws = new WebSocket(`${WS_URL}?doc=${encodeURIComponent(docId)}`);
-    ws.onopen = () => openCb(); // Provider sends sync1
+    ws.onopen = () => {
+      setOnline(true);
+      openCb(); // Provider sends sync1
+    };
     ws.onmessage = (e) => {
       let msg: WireMessage;
       try {
@@ -83,8 +101,10 @@ export function createCollab(docId: string, user: PresenceUser): CollabSession {
       else syncCb(msg);
     };
     ws.onclose = () => {
+      setOnline(false);
       if (!closed) setTimeout(connect, 1000); // naive reconnect (Provider re-syncs on reopen)
     };
+    ws.onerror = () => setOnline(false);
   };
   connect();
 
@@ -104,10 +124,15 @@ export function createCollab(docId: string, user: PresenceUser): CollabSession {
       awareness.on("change", emit);
       emit();
     },
+    onStatus(cb) {
+      statusCb = cb;
+      cb({ online });
+    },
     destroy() {
       closed = true;
       awareness.destroy();
       ws?.close();
+      void idb.destroy();
       ydoc.destroy();
     },
   };

@@ -13,6 +13,7 @@ import { localUser } from "./editor/collab";
  */
 export function Editor({ docId }: { docId: string }) {
   const [presence, setPresence] = useState<PresenceUser[]>([]);
+  const [online, setOnline] = useState(true);
   const user = useMemo<PresenceUser>(() => localUser(), []);
 
   return (
@@ -24,11 +25,15 @@ export function Editor({ docId }: { docId: string }) {
           </span>
         ))}
         {presence.length > 0 && <span style={{ color: "#7c8794", fontSize: 12 }}>{presence.length} here</span>}
+        {/* Offline-first status: NOT a merge-conflict dialog — there are no conflicts to resolve (S08). */}
+        <span style={{ ...statusPill, ...(online ? onlinePill : offlinePill) }}>
+          {online ? "● online" : "○ offline — editing locally, will merge"}
+        </span>
       </div>
-      <ProseMirrorView key={docId} docId={docId} user={user} onPresence={setPresence} />
+      <ProseMirrorView key={docId} docId={docId} user={user} onPresence={setPresence} onStatus={(s) => setOnline(s.online)} />
       <p style={hint}>
-        Real-time collaboration (Yjs). Open two windows and edit together — both edits survive, cursors track.
-        The S05 last-write-wins clobber is gone for good.
+        Offline-first (Yjs + IndexedDB). Edit with no connection; reconnect and it merges — no lost work, no
+        conflict dialog. Open two windows to watch cursors track and edits converge.
       </p>
     </div>
   );
@@ -47,3 +52,6 @@ const avatar: CSSProperties = {
   fontWeight: 600,
 };
 const hint: CSSProperties = { color: "#5b6572", fontSize: 12, marginTop: 8 };
+const statusPill: CSSProperties = { marginLeft: "auto", fontSize: 11, padding: "2px 8px", borderRadius: 999 };
+const onlinePill: CSSProperties = { background: "rgba(47,191,113,.15)", color: "#2fbf71" };
+const offlinePill: CSSProperties = { background: "rgba(224,165,75,.15)", color: "#e0a54b" };
