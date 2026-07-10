@@ -3,3 +3,4 @@ export * from "./node";
 export * from "./order";
 export * from "./tree";
 export * from "./acl";
+export * from "./share";
