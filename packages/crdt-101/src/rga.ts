@@ -19,6 +19,8 @@ export interface Element {
   id: OpId;
   value: string;
   originLeft: OpId | null;
+  /** Tombstone flag. A deleted element is kept (so concurrent ops can still reference it) but invisible. */
+  deleted: boolean;
 }
 
 export type Op =
@@ -40,17 +42,17 @@ export class RGA {
   }
 
   // ── local edits: produce an op AND apply it locally ────────────────────────────────────────────
-  /** Insert `value` at index `index` (0..length). Returns the op to broadcast. */
+  /** Insert `value` at visible index `index` (0..length). Returns the op to broadcast. */
   insert(index: number, value: string): Op {
-    const originLeft = this.elementBefore(index)?.id ?? null;
+    const originLeft = this.visibleElementBefore(index)?.id ?? null;
     const op: Op = { type: "insert", id: this.clock.tick(), value, originLeft };
     this.apply(op);
     return op;
   }
 
-  /** Delete the char at `index`. Returns the op, or null if index is out of range. */
+  /** Delete the visible char at `index`. Returns the op, or null if index is out of range. */
   deleteAt(index: number): Op | null {
-    const el = this.elements[index];
+    const el = this.visibleElementAt(index);
     if (!el) return null;
     const op: Op = { type: "delete", id: el.id };
     this.apply(op);
@@ -73,16 +75,12 @@ export class RGA {
       const key = opIdKey(op.id);
       if (this.applied.has(key)) return; // idempotent
       this.clock.observe(op.id);
-      this.integrateInsert({ id: op.id, value: op.value, originLeft: op.originLeft });
+      this.integrateInsert({ id: op.id, value: op.value, originLeft: op.originLeft, deleted: false });
       this.applied.add(key);
     } else {
       this.clock.observe(op.id);
-      // HARD DELETE: splice the element out and forget its id entirely.
-      const idx = this.indexOfId(op.id);
-      if (idx >= 0) {
-        this.elements.splice(idx, 1);
-        this.byId.delete(opIdKey(op.id));
-      }
+      // TOMBSTONE: keep the element (its id must survive as an anchor for concurrent ops) — just hide it.
+      this.byId.get(opIdKey(op.id))!.deleted = true;
     }
   }
 
@@ -134,24 +132,35 @@ export class RGA {
     this.byId.set(opIdKey(el.id), el);
   }
 
-  // ── reads ──────────────────────────────────────────────────────────────────────────────────────
+  // ── reads (skip tombstones) ──────────────────────────────────────────────────────────────────────
   toString(): string {
     let out = "";
-    for (const el of this.elements) out += el.value;
+    for (const el of this.elements) if (!el.deleted) out += el.value;
     return out;
   }
 
   get length(): number {
-    return this.elements.length;
+    let n = 0;
+    for (const el of this.elements) if (!el.deleted) n++;
+    return n;
   }
 
   private indexOfId(id: OpId): number {
     return this.elements.findIndex((e) => opIdEq(e.id, id));
   }
 
-  /** The element just before `index` (index 0 ⇒ null → insert at the very start). */
-  private elementBefore(index: number): Element | undefined {
+  private visibleElementAt(index: number): Element | undefined {
+    let seen = -1;
+    for (const el of this.elements) {
+      if (el.deleted) continue;
+      if (++seen === index) return el;
+    }
+    return undefined;
+  }
+
+  /** The visible element just before `index` (index 0 ⇒ null → insert at the very start). */
+  private visibleElementBefore(index: number): Element | undefined {
     if (index <= 0) return undefined;
-    return this.elements[Math.min(index, this.elements.length) - 1];
+    return this.visibleElementAt(index - 1);
   }
 }
