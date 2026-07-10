@@ -7,5 +7,6 @@ export * from "./nesting";
 export * from "./toggle";
 export * from "./move";
 export * from "./keyboard";
+export * from "./suggestions";
 export * from "./naiveSync";
 export * from "./state";

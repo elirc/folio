@@ -157,6 +157,23 @@ const marks: Record<string, MarkSpec> = {
     parseDOM: [{ tag: "a[href]", getAttrs: (el) => ({ href: (el as HTMLElement).getAttribute("href"), title: (el as HTMLElement).getAttribute("title") }) }],
     toDOM: (mark) => ["a", { href: mark.attrs.href as string, title: mark.attrs.title as string }, 0],
   },
+
+  // Suggestion mode (S09): tracked changes as MARKS, not real edits. Suggested text carries `suggestion_
+  // insert` (green, provisional) until accepted; text proposed for removal carries `suggestion_delete`
+  // (struck-through) until accept actually deletes it. Both hold `author`. They live in the doc (synced via
+  // Yjs) because a suggestion is shared state until someone resolves it.
+  suggestion_insert: {
+    attrs: { author: { default: "" } },
+    inclusive: true,
+    parseDOM: [{ tag: "ins[data-author]", getAttrs: (el) => ({ author: (el as HTMLElement).getAttribute("data-author") }) }],
+    toDOM: (mark) => ["ins", { "data-author": mark.attrs.author as string, class: "folio-sugg-ins" }, 0],
+  },
+  suggestion_delete: {
+    attrs: { author: { default: "" } },
+    inclusive: false,
+    parseDOM: [{ tag: "del[data-author]", getAttrs: (el) => ({ author: (el as HTMLElement).getAttribute("data-author") }) }],
+    toDOM: (mark) => ["del", { "data-author": mark.attrs.author as string, class: "folio-sugg-del" }, 0],
+  },
 };
 
 export const folioSchema = new Schema({ nodes, marks });
