@@ -6,7 +6,7 @@
 | 2 | S03 | Block `id`s generated client-side with `Math.random`-ish scheme — collision-prone under offline/concurrent creation | editor block ids | S07 (Yjs-managed ids / proper unique ids; collision test) | planned |
 | 3 | S09 | Comment anchors stored as absolute character offsets — any concurrent edit shifts them to the wrong text | comment anchoring | S13 (relative positions; anchor-drift fuzz) — note: S09 itself introduces relative positions for the happy path, S13 hardens edge cases | planned |
 | 4 | S10 | Update log grows unbounded — no compaction; document load time degrades with edit count | doc persistence | S10 mechanism (compaction: snapshot + Y.mergeUpdates; compacted≡replayed property) → S12 continuous load-time budget gate | HARVESTED (mechanism S10; budget-enforced S12) |
-| 5 | S11 | ACL checks on document *load* but not on live update messages — a demoted collaborator's in-flight socket keeps editing | ws update authz | S13 (per-message ACL revalidation; revoked-mid-session test) | planned |
+| 5 | S11 | ACL checks on document *load* but not on live update messages — a demoted collaborator's in-flight socket keeps editing | ws update authz (ws.ts join-only canView; yroom.handle applies updates unchecked) | S13 (per-message ACL revalidation; revoked-mid-session test) | PLANTED (silent) — load-time check in ws.ts, no per-message authz; S11 tests cover load-time only |
 
 **In-PR arcs (planted and fixed inside one PR by design):**
 S06 toy-CRDT tombstone bug (deleted-then-concurrently-inserted char resurrects) → fuzzer catches → fix · S07 provider reconnect drops updates during the sync gap → gap test → fix · S08 offline merge duplicates a block → dedupe via CRDT identity · S12 cursor-render storm → batching.

@@ -1,8 +1,10 @@
 import type { Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { prisma } from "@folio/db";
+import { canView } from "@folio/shared";
 import { docFromProseMirrorJSON, encodeState, type WireMessage } from "@folio/collab";
 import { YRooms } from "./yroom";
+import { memberRole } from "./lib/permissions";
 
 /**
  * The WebSocket gateway (S07) — a real Yjs sync endpoint. S05 was a dumb whole-doc LWW relay; now the server
@@ -29,11 +31,24 @@ export function attachWebSocketGateway(server: Server): WebSocketServer {
   wss.on("connection", (ws: WebSocket, req) => {
     const url = new URL(req.url ?? "", "http://localhost");
     const docId = url.searchParams.get("doc");
+    const memberId = url.searchParams.get("member");
     if (!docId) {
       ws.close();
       return;
     }
-    void rooms.join(docId, ws);
+
+    // Permission check AT LOAD: resolve the member's effective role for this doc and reject anyone who
+    // can't even view it. Editing capability is enforced in the UI (viewers get a read-only editor).
+    void (async () => {
+      if (memberId) {
+        const role = await memberRole(docId, memberId).catch(() => null);
+        if (role && !canView(role)) {
+          ws.close(1008, "forbidden");
+          return;
+        }
+      }
+      await rooms.join(docId, ws);
+    })();
 
     ws.on("message", (raw) => {
       const msg = safeJson(raw.toString()) as WireMessage | null;
