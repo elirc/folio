@@ -3,6 +3,7 @@ import { type PresenceUser } from "@folio/collab";
 import { ProseMirrorView } from "./editor/ProseMirrorView";
 import { CommentsPanel } from "./editor/CommentsPanel";
 import { VersionHistory } from "./editor/VersionHistory";
+import { SharePanel } from "./editor/SharePanel";
 import { localUser } from "./editor/collab";
 
 /**
@@ -17,7 +18,7 @@ export function Editor({ docId }: { docId: string }) {
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   const [online, setOnline] = useState(true);
   const [anchor, setAnchor] = useState<string | null>(null);
-  const [panel, setPanel] = useState<"comments" | "history">("comments");
+  const [panel, setPanel] = useState<"comments" | "history" | "share">("comments");
   const restoreRef = useRef<((b64: string) => void) | null>(null);
   const user = useMemo<PresenceUser>(() => localUser(), []);
 
@@ -59,12 +60,13 @@ export function Editor({ docId }: { docId: string }) {
             <button style={{ ...tab, ...(panel === "history" ? tabActive : {}) }} onClick={() => setPanel("history")}>
               History
             </button>
+            <button style={{ ...tab, ...(panel === "share" ? tabActive : {}) }} onClick={() => setPanel("share")}>
+              Share
+            </button>
           </div>
-          {panel === "comments" ? (
-            <CommentsPanel docId={docId} author={user.name} selectionAnchor={anchor} />
-          ) : (
-            <VersionHistory docId={docId} onRestore={(b64) => restoreRef.current?.(b64)} />
-          )}
+          {panel === "comments" && <CommentsPanel docId={docId} author={user.name} selectionAnchor={anchor} />}
+          {panel === "history" && <VersionHistory docId={docId} onRestore={(b64) => restoreRef.current?.(b64)} />}
+          {panel === "share" && <SharePanel docId={docId} />}
         </div>
       </div>
     </div>
