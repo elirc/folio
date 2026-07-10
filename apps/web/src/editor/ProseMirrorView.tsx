@@ -11,11 +11,13 @@ import {
 } from "@folio/editor";
 import { uploadImage } from "../lib/api";
 import { blockHandlesPlugin } from "./blockHandles";
+import { remoteCursorsPlugin, remoteCursorsKey } from "./remoteCursors";
+import { NaiveSyncClient, type RemoteCursor, type SyncUser } from "./syncClient";
 
-/** Build the editor state and layer in the view-only plugins (block handles) that live in the web app. */
+/** Build the editor state and layer in the view-only plugins (block handles, remote cursors). */
 function buildState(initialJSON: unknown): EditorState {
   const base = createEditorState(docFromJSON(initialJSON));
-  return base.reconfigure({ plugins: [...base.plugins, blockHandlesPlugin()] });
+  return base.reconfigure({ plugins: [...base.plugins, blockHandlesPlugin(), remoteCursorsPlugin()] });
 }
 
 /**
@@ -29,11 +31,17 @@ function buildState(initialJSON: unknown): EditorState {
  * This file is only the *binding* — the swampy contenteditable part we adopt ProseMirror to avoid owning.
  */
 export function ProseMirrorView(props: {
+  docId: string;
   initialJSON: unknown;
+  user: SyncUser;
   onChange: (json: unknown) => void;
+  onPresence?: (users: SyncUser[]) => void;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const syncRef = useRef<NaiveSyncClient | null>(null);
+  const applyingRemote = useRef(false);
+  const remoteCursors = useRef<Map<string, RemoteCursor>>(new Map());
   const [slash, setSlash] = useState<{ query: string; from: number; top: number; left: number } | null>(null);
   const [slashIdx, setSlashIdx] = useState(0);
 
@@ -46,6 +54,15 @@ export function ProseMirrorView(props: {
         const next = view.state.apply(tr);
         view.updateState(next);
         if (tr.docChanged) props.onChange(docToJSON(next.doc));
+        // S05 naive sync: broadcast the WHOLE document on every local change (LWW), and our cursor on any
+        // selection move. `applyingRemote` guards against re-broadcasting an update we just received.
+        if (!applyingRemote.current) {
+          if (tr.docChanged) syncRef.current?.sendDoc(docToJSON(next.doc));
+          if (tr.selectionSet || tr.docChanged) {
+            const s = next.selection;
+            syncRef.current?.sendCursor(s.anchor, s.head);
+          }
+        }
         updateSlash(view);
       },
       // Image paste/drop → upload via StorageService → insert an image block. Returning true tells PM we
@@ -78,6 +95,46 @@ export function ProseMirrorView(props: {
     if (!view) return;
     view.updateState(buildState(props.initialJSON));
   }, [props.initialJSON]);
+
+  // Sync-client lifecycle: one client per (docId, user). Reconnect when the doc changes.
+  useEffect(() => {
+    const client = new NaiveSyncClient(props.docId, props.user, {
+      onDoc: (json) => applyRemoteDoc(json),
+      onPresence: (users) => props.onPresence?.(users),
+      onCursor: (c) => setRemoteCursor(c),
+    });
+    syncRef.current = client;
+    client.connect();
+    return () => {
+      client.close();
+      syncRef.current = null;
+    };
+    // Re-create the client only when the doc or user identity changes.
+  }, [props.docId, props.user.id]);
+
+  /** LWW: replace the whole document with the incoming one, without re-broadcasting or polluting undo. */
+  function applyRemoteDoc(json: unknown) {
+    const view = viewRef.current;
+    if (!view) return;
+    const incoming = docFromJSON(json);
+    applyingRemote.current = true;
+    const tr = view.state.tr.replaceWith(0, view.state.doc.content.size, incoming.content);
+    tr.setMeta("addToHistory", false);
+    view.dispatch(tr);
+    applyingRemote.current = false;
+  }
+
+  /** Collect a remote cursor and push the whole set into the decoration plugin. */
+  function setRemoteCursor(c: RemoteCursor) {
+    const view = viewRef.current;
+    if (!view) return;
+    remoteCursors.current.set(c.user.id, c);
+    const tr = view.state.tr.setMeta(remoteCursorsKey, { cursors: [...remoteCursors.current.values()] });
+    tr.setMeta("addToHistory", false);
+    applyingRemote.current = true;
+    view.dispatch(tr);
+    applyingRemote.current = false;
+  }
 
   // Detect a `/` slash-menu context: an empty-ish block where the text before the cursor is `/query`.
   function updateSlash(view: EditorView) {
