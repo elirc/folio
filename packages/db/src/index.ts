@@ -13,4 +13,4 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export { Prisma } from "@prisma/client";
-export type { Workspace, Member, Node, Acl, DocState } from "@prisma/client";
+export type { Workspace, Member, Node, Acl, DocState, Comment } from "@prisma/client";
