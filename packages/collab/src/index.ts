@@ -5,3 +5,5 @@ export * from "./awareness";
 export * from "./offline";
 export * from "./anchor";
 export * from "./history";
+export * from "./batch";
+export * from "./loadgen";
