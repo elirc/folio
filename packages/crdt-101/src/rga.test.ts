@@ -35,6 +35,13 @@ describe("crdt-101 RGA insert (S06)", () => {
     expect(a.toString()).toBe("x");
   });
 
+  it("deletes a char (single replica)", () => {
+    const r = new RGA("a");
+    "abc".split("").forEach((c, i) => r.insert(i, c));
+    r.deleteAt(1); // remove "b"
+    expect(r.toString()).toBe("ac");
+  });
+
   it("buffers an insert whose origin hasn't arrived, then integrates it (causal readiness)", () => {
     const src = new RGA("a");
     const o1 = src.insert(0, "x");

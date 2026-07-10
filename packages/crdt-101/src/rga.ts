@@ -21,7 +21,9 @@ export interface Element {
   originLeft: OpId | null;
 }
 
-export type Op = { type: "insert"; id: OpId; value: string; originLeft: OpId | null };
+export type Op =
+  | { type: "insert"; id: OpId; value: string; originLeft: OpId | null }
+  | { type: "delete"; id: OpId };
 
 export class RGA {
   private readonly clock: LamportClock;
@@ -46,6 +48,15 @@ export class RGA {
     return op;
   }
 
+  /** Delete the char at `index`. Returns the op, or null if index is out of range. */
+  deleteAt(index: number): Op | null {
+    const el = this.elements[index];
+    if (!el) return null;
+    const op: Op = { type: "delete", id: el.id };
+    this.apply(op);
+    return op;
+  }
+
   // ── remote application: idempotent, commutative, causally buffered ──────────────────────────────
   apply(op: Op): void {
     this.integrate(op);
@@ -58,16 +69,27 @@ export class RGA {
       this.pending.push(op);
       return;
     }
-    const key = opIdKey(op.id);
-    if (this.applied.has(key)) return; // idempotent
-    this.clock.observe(op.id);
-    this.integrateInsert({ id: op.id, value: op.value, originLeft: op.originLeft });
-    this.applied.add(key);
+    if (op.type === "insert") {
+      const key = opIdKey(op.id);
+      if (this.applied.has(key)) return; // idempotent
+      this.clock.observe(op.id);
+      this.integrateInsert({ id: op.id, value: op.value, originLeft: op.originLeft });
+      this.applied.add(key);
+    } else {
+      this.clock.observe(op.id);
+      // HARD DELETE: splice the element out and forget its id entirely.
+      const idx = this.indexOfId(op.id);
+      if (idx >= 0) {
+        this.elements.splice(idx, 1);
+        this.byId.delete(opIdKey(op.id));
+      }
+    }
   }
 
-  /** Is an op's causal dependency satisfied? insert ⇒ its origin must already be present. */
+  /** Is an op's causal dependency satisfied? insert ⇒ origin present; delete ⇒ target present. */
   private isReady(op: Op): boolean {
-    return !op.originLeft || this.byId.has(opIdKey(op.originLeft));
+    if (op.type === "insert") return !op.originLeft || this.byId.has(opIdKey(op.originLeft));
+    return this.byId.has(opIdKey(op.id));
   }
 
   /** Retry buffered ops whose dependency may now exist (a fixpoint pass — no recursion into apply). */
