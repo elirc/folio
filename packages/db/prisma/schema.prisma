@@ -73,8 +73,11 @@ model DocState {
   id        String   @id @default(cuid())
   nodeId    String   @unique
   node      Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  // Plaintext today. S05 makes concurrent edits fight over this single string (naive LWW, broken on
-  // purpose); S07 replaces it with a Yjs update log (Bytes) + snapshots. The name survives the change.
+  // S01–S06: `text` held the document (plaintext, then ProseMirror JSON). S07 adopts Yjs: the CRDT lives in
+  // `yUpdate` (an encoded Yjs update = the merged update log). `text` is now the MIGRATION SOURCE (old
+  // PM-JSON, read once to seed the Y.Doc) and a periodic human-readable snapshot for export. The name
+  // survived the whole journey — plaintext → PM-JSON → Yjs — exactly as ADR-0002 promised.
   text      String   @default("")
+  yUpdate   Bytes? // the Yjs document state (S07). Grows as an update log until S12 adds compaction (flaw #4).
   updatedAt DateTime @updatedAt
 }
