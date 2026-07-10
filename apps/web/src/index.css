@@ -84,14 +84,17 @@ body {
 .folio-editor .ProseMirror > *:hover > .folio-block-handle {
   opacity: 1;
 }
-/* S05 remote cursors (naive, absolute-offset — they drift under concurrent edits, by design). */
-.folio-remote-cursor {
+/* S07 remote cursors via y-prosemirror (yCursorPlugin) — relative positions, so they track correctly. */
+.ProseMirror-yjs-cursor {
   position: relative;
-  border-left: 2px solid;
   margin-left: -1px;
+  margin-right: -1px;
+  border-left: 2px solid black;
+  border-right: 2px solid black;
+  word-break: normal;
   pointer-events: none;
 }
-.folio-remote-cursor-label {
+.ProseMirror-yjs-cursor > div {
   position: absolute;
   top: -1.3em;
   left: -2px;
@@ -101,4 +104,8 @@ body {
   border-radius: 3px 3px 3px 0;
   color: white;
   white-space: nowrap;
+}
+/* y-prosemirror selection highlight */
+.ProseMirror-yjs-selection {
+  opacity: 0.35;
 }

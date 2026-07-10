@@ -1,62 +1,85 @@
 import type { Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
-import { ClientMessageSchema, type ServerMessage } from "@folio/shared";
-import { Rooms } from "./rooms";
+import { prisma } from "@folio/db";
+import { docFromProseMirrorJSON, encodeState, type WireMessage } from "@folio/collab";
+import { YRooms } from "./yroom";
 
 /**
- * The WebSocket gateway (S05) — a NAIVE real-time relay. Clients `join` a per-document room, then broadcast
- * whole-document updates (last-write-wins, flaw #1), plus best-effort presence and cursors. The server is a
- * dumb fan-out: it does not merge, order, or reconcile anything — it just forwards each whole-doc blob to
- * the other tabs in the room, last one wins.
+ * The WebSocket gateway (S07) — a real Yjs sync endpoint. S05 was a dumb whole-doc LWW relay; now the server
+ * runs the Yjs sync protocol against an authoritative Y.Doc per document (see yroom.ts), persists the update
+ * log, and relays incremental updates + awareness. The transport (rooms, upgrade, fan-out) is the same pipe
+ * built in S01/S05 — only the payload semantics changed, as promised.
  *
- * 📘 The server has NO model of concurrency. It can't — it only sees opaque whole-document blobs with a
- * revision counter. That's exactly why LWW is all it can do, and exactly what S07 changes: Yjs updates are
- * *mergeable*, so the relay becomes a real convergence point instead of an overwrite pipe. The room + fan-
- * out framing here survives into S07; only the payload semantics change.
+ * The URL carries the document: /ws?doc=<id>. First message from a client is sync1; the server answers with
+ * the delta it lacks.
  */
 export function attachWebSocketGateway(server: Server): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true });
-  const rooms = new Rooms<WebSocket>();
+  const rooms = new YRooms(loadDocUpdate, persistDocUpdate);
 
   server.on("upgrade", (req, socket, head) => {
-    if (req.url !== "/ws") {
+    const url = new URL(req.url ?? "", "http://localhost");
+    if (url.pathname !== "/ws") {
       socket.destroy();
       return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
   });
 
-  const send = (ws: WebSocket, msg: ServerMessage) => ws.send(JSON.stringify(msg));
-  const broadcastPresence = (docId: string) => {
-    const users = rooms.presence(docId);
-    for (const m of rooms.peers(docId)) send(m.socket, { type: "presence", docId, users });
-  };
+  wss.on("connection", (ws: WebSocket, req) => {
+    const url = new URL(req.url ?? "", "http://localhost");
+    const docId = url.searchParams.get("doc");
+    if (!docId) {
+      ws.close();
+      return;
+    }
+    void rooms.join(docId, ws);
 
-  wss.on("connection", (ws: WebSocket) => {
     ws.on("message", (raw) => {
-      const parsed = ClientMessageSchema.safeParse(safeJson(raw.toString()));
-      if (!parsed.success) return; // ignore anything that isn't a known message
-      const msg = parsed.data;
-
-      if (msg.type === "join") {
-        rooms.join(msg.docId, ws, msg.user);
-        broadcastPresence(msg.docId);
-        return;
-      }
-
-      // doc_update / cursor: forward verbatim to the OTHER tabs in the same room. No merge, no order.
-      const docId = rooms.docOf(ws);
-      if (!docId || docId !== msg.docId) return; // must have joined the room it's posting to
-      for (const m of rooms.others(docId, ws)) send(m.socket, msg);
+      const msg = safeJson(raw.toString()) as WireMessage | null;
+      if (msg && typeof msg.type === "string") rooms.handle(ws, msg);
     });
-
-    ws.on("close", () => {
-      const docId = rooms.leave(ws);
-      if (docId) broadcastPresence(docId);
-    });
+    ws.on("close", () => rooms.leave(ws));
   });
 
   return wss;
+}
+
+/**
+ * Load a document's persisted Yjs state. If it doesn't exist yet, MIGRATE the S03–S06 ProseMirror-JSON in
+ * `text` into a Y.Doc (the expand step) and return that — so old documents open seamlessly into the CRDT.
+ */
+async function loadDocUpdate(docId: string): Promise<Uint8Array | null> {
+  const state = await prisma.docState.findUnique({ where: { nodeId: docId }, select: { yUpdate: true, text: true } });
+  if (!state) return null;
+  if (state.yUpdate) return new Uint8Array(state.yUpdate);
+  // Migration: seed a Y.Doc from the old PM-JSON, persist it, and return its encoded state.
+  const doc = docFromProseMirrorJSON(parseMaybeJSON(state.text));
+  const update = encodeState(doc);
+  await persistDocUpdate(docId, update);
+  return update;
+}
+
+function persistDocUpdate(docId: string, update: Uint8Array): void {
+  // Fire-and-forget: keep the socket path non-blocking. A production build would debounce + snapshot.
+  void prisma.docState
+    .upsert({
+      where: { nodeId: docId },
+      create: { nodeId: docId, yUpdate: Buffer.from(update) },
+      update: { yUpdate: Buffer.from(update) },
+    })
+    .catch(() => {
+      /* best-effort persistence; the in-memory room remains the live source */
+    });
+}
+
+function parseMaybeJSON(text: string): unknown {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 function safeJson(s: string): unknown {

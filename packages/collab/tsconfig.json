@@ -1,0 +1,9 @@
+{
+  "extends": "@folio/config/tsconfig.base.json",
+  "compilerOptions": {
+    // Pulls @folio/editor's source, whose ProseMirror parseDOM types reference DOM (HTMLElement) at the type
+    // level. DOM lib is type-only — Yjs, the protocol, and the fuzzer all still run in Node with no browser.
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src"]
+}

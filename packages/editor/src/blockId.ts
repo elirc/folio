@@ -21,3 +21,20 @@ export function makeBlockId(): string {
 export function isBlockId(value: unknown): value is string {
   return typeof value === "string" && /^b[0-9a-z]{8}$/.test(value);
 }
+
+/**
+ * S07 — HARVEST OF FLAW #2 (ledger: "block ids generated client-side with Math.random-ish scheme —
+ * collision-prone under offline/concurrent creation"). Once we adopt Yjs, identity is no longer ours to
+ * gamble on: every client gets a unique `clientId` (a 53-bit random assigned per Y.Doc) and a monotonically
+ * increasing `clock`. The pair (clientId, clock) is GLOBALLY UNIQUE by construction — no timestamp bucket,
+ * no thin random tail, no birthday-bound collision. This is *identity, not chance* (S06's keystone): the
+ * same substitution that makes the CRDT converge also makes block ids collision-proof for free.
+ */
+export function blockIdFor(clientId: number, clock: number): string {
+  return `b${clientId.toString(36)}-${clock.toString(36)}`;
+}
+
+/** Does this id look like a Yjs-derived (collision-proof) id? */
+export function isYjsBlockId(value: unknown): value is string {
+  return typeof value === "string" && /^b[0-9a-z]+-[0-9a-z]+$/.test(value);
+}
