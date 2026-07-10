@@ -1,0 +1,4 @@
+{
+  "extends": "@folio/config/tsconfig.base.json",
+  "include": ["src"]
+}

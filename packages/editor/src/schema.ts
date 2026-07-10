@@ -87,16 +87,45 @@ const nodes: Record<string, NodeSpec> = {
   list_item: {
     content: "paragraph block*",
     defining: true,
-    parseDOM: [{ tag: "li" }],
-    toDOM: () => ["li", 0],
+    // `collapsed` is DOCUMENT state (ADR-0005): it's part of the outline's meaning, so it syncs to every
+    // collaborator (Notion's choice). It is NOT per-user view state — that distinction is the whole point.
+    attrs: { collapsed: { default: false } },
+    parseDOM: [{ tag: "li", getAttrs: (el) => ({ collapsed: (el as HTMLElement).getAttribute("data-collapsed") === "true" }) }],
+    toDOM: (node) => ["li", node.attrs.collapsed ? { "data-collapsed": "true" } : {}, 0],
   },
 
   todo_item: {
     content: "paragraph block*",
     defining: true,
-    attrs: { checked: { default: false } },
-    parseDOM: [{ tag: "li[data-checked]", getAttrs: (el) => ({ checked: (el as HTMLElement).getAttribute("data-checked") === "true" }) }],
-    toDOM: (node) => ["li", { "data-checked": String(node.attrs.checked) }, 0],
+    attrs: { checked: { default: false }, collapsed: { default: false } },
+    parseDOM: [
+      {
+        tag: "li[data-checked]",
+        getAttrs: (el) => ({
+          checked: (el as HTMLElement).getAttribute("data-checked") === "true",
+          collapsed: (el as HTMLElement).getAttribute("data-collapsed") === "true",
+        }),
+      },
+    ],
+    toDOM: (node) => [
+      "li",
+      { "data-checked": String(node.attrs.checked), ...(node.attrs.collapsed ? { "data-collapsed": "true" } : {}) },
+      0,
+    ],
+  },
+
+  image: {
+    group: "block",
+    // A media block. `src` is a StorageService URL (S04). `alt` is accessibility text (enforced in S14).
+    attrs: { src: {}, alt: { default: "" }, blockId: { default: null } },
+    draggable: true,
+    parseDOM: [
+      {
+        tag: "img[src]",
+        getAttrs: (el) => ({ src: (el as HTMLElement).getAttribute("src"), alt: (el as HTMLElement).getAttribute("alt") ?? "" }),
+      },
+    ],
+    toDOM: (node) => ["img", { src: node.attrs.src as string, alt: node.attrs.alt as string, "data-block-id": node.attrs.blockId as string }],
   },
 
   divider: {

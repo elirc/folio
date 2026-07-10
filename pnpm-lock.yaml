@@ -38,6 +38,9 @@ importers:
       '@folio/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@folio/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       fastify:
         specifier: ^5.1.0
         version: 5.10.0
@@ -192,6 +195,18 @@ importers:
       fast-check:
         specifier: ^3.22.0
         version: 3.23.2
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.4
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/storage:
+    devDependencies:
+      '@folio/config':
+        specifier: workspace:*
+        version: link:../config
       typescript:
         specifier: ^5.6.3
         version: 5.9.3

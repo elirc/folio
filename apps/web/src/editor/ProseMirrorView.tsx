@@ -1,12 +1,22 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { EditorView } from "prosemirror-view";
+import { EditorState } from "prosemirror-state";
 import {
   createEditorState,
   docFromJSON,
   docToJSON,
   filterSlashItems,
+  insertImage,
   type SlashItem,
 } from "@folio/editor";
+import { uploadImage } from "../lib/api";
+import { blockHandlesPlugin } from "./blockHandles";
+
+/** Build the editor state and layer in the view-only plugins (block handles) that live in the web app. */
+function buildState(initialJSON: unknown): EditorState {
+  const base = createEditorState(docFromJSON(initialJSON));
+  return base.reconfigure({ plugins: [...base.plugins, blockHandlesPlugin()] });
+}
 
 /**
  * The React ⇄ ProseMirror boundary (S03). ProseMirror owns its own DOM and document model; React owns the
@@ -30,14 +40,27 @@ export function ProseMirrorView(props: {
   // Mount ONCE. initialJSON changes (switching docs) are handled by reconfiguring the view's state below.
   useEffect(() => {
     if (!mountRef.current) return;
-    const state = createEditorState(docFromJSON(props.initialJSON));
     const view = new EditorView(mountRef.current, {
-      state,
+      state: buildState(props.initialJSON),
       dispatchTransaction(tr) {
         const next = view.state.apply(tr);
         view.updateState(next);
         if (tr.docChanged) props.onChange(docToJSON(next.doc));
         updateSlash(view);
+      },
+      // Image paste/drop → upload via StorageService → insert an image block. Returning true tells PM we
+      // handled it, so it doesn't also paste the raw file.
+      handlePaste(view, event) {
+        const file = imageFrom(event.clipboardData?.files);
+        if (!file) return false;
+        void uploadAndInsert(view, file);
+        return true;
+      },
+      handleDrop(view, event) {
+        const file = imageFrom((event as DragEvent).dataTransfer?.files);
+        if (!file) return false;
+        void uploadAndInsert(view, file);
+        return true;
       },
     });
     viewRef.current = view;
@@ -53,8 +76,7 @@ export function ProseMirrorView(props: {
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
-    const doc = docFromJSON(props.initialJSON);
-    view.updateState(createEditorState(doc));
+    view.updateState(buildState(props.initialJSON));
   }, [props.initialJSON]);
 
   // Detect a `/` slash-menu context: an empty-ish block where the text before the cursor is `/query`.
@@ -122,6 +144,24 @@ export function ProseMirrorView(props: {
       )}
     </div>
   );
+}
+
+/** First image file in a FileList, if any. */
+function imageFrom(files: FileList | null | undefined): File | null {
+  if (!files) return null;
+  for (const f of Array.from(files)) if (f.type.startsWith("image/")) return f;
+  return null;
+}
+
+/** Upload an image and insert it at the current selection. Errors surface in the console, not a crash. */
+async function uploadAndInsert(view: EditorView, file: File): Promise<void> {
+  try {
+    const url = await uploadImage(file);
+    insertImage(url, file.name)(view.state, view.dispatch);
+    view.focus();
+  } catch (err) {
+    console.error("[folio] image upload failed", err);
+  }
 }
 
 const editorBox: CSSProperties = {
