@@ -3,3 +3,4 @@ export * from "./protocol";
 export * from "./provider";
 export * from "./awareness";
 export * from "./offline";
+export * from "./anchor";
