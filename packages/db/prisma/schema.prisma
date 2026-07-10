@@ -54,8 +54,25 @@ model Node {
   acls        Acl[]
   comments    Comment[]
   versions    VersionSnapshot[]
+  shareLinks  ShareLink[]
 
   @@index([workspaceId, parentId])
+}
+
+// A share link (S11): a scoped capability token granting a role to anyone holding it, until expiry or
+// revocation. 🔗 Pulse S10's lesson — expiry + revocation are mandatory (a link without them is a permanent,
+// un-auditable backdoor). Layered ON TOP of role-based inheritance.
+model ShareLink {
+  id        String    @id @default(cuid())
+  token     String    @unique @default(cuid())
+  nodeId    String
+  node      Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  role      String    @default("viewer") // owner | editor | commenter | viewer
+  expiresAt DateTime?
+  revoked   Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  @@index([nodeId])
 }
 
 // A point-in-time checkpoint of a document (S10). `yState` is a COMPACTED Yjs snapshot (one merged update),
