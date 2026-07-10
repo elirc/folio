@@ -33,6 +33,25 @@ async function main() {
     },
   });
 
+  // S03: documents are stored as ProseMirror JSON (a block tree) in `DocState.text` — still one blob,
+  // still a whole-doc write on save (naive, on purpose; S05 breaks it, S07 replaces it). The name survives.
+  const welcomeDoc = {
+    type: "doc",
+    content: [
+      { type: "heading", attrs: { level: 1, blockId: "bwelcome1" }, content: [{ type: "text", text: "Welcome to Folio" }] },
+      {
+        type: "paragraph",
+        attrs: { blockId: "bintro001" },
+        content: [{ type: "text", text: "This is a real block editor now — type “/” for blocks, **bold**, # for headings, - for lists." }],
+      },
+      {
+        type: "paragraph",
+        attrs: { blockId: "bintro002" },
+        content: [{ type: "text", text: "Still single-user until Sprint 5. See ADR-0002 for the collaboration roadmap." }],
+      },
+    ],
+  };
+
   await prisma.node.upsert({
     where: { id: "demo-doc" },
     update: {},
@@ -43,7 +62,7 @@ async function main() {
       type: "doc",
       title: "Welcome to Folio",
       sortOrder: keyAfter(null),
-      docState: { create: { text: "Start typing…\n\n(This is a textarea today — ProseMirror arrives in S3.)" } },
+      docState: { create: { text: JSON.stringify(welcomeDoc) } },
     },
   });
 

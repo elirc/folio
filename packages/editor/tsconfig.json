@@ -1,0 +1,10 @@
+{
+  "extends": "@folio/config/tsconfig.base.json",
+  "compilerOptions": {
+    // ProseMirror's `parseDOM` / `getAttrs` reference DOM types (HTMLElement) at the TYPE level. Including
+    // the DOM lib is type-only — the schema + state + rules still run in Node with no browser (that's why
+    // the tests live here). Only prosemirror-view needs a real DOM, and it lives in apps/web, not here.
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src"]
+}
