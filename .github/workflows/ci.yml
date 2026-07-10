@@ -1,0 +1,62 @@
+name: CI
+
+# Activates once the monorepo exists (Sprint 01 adds pnpm + Turborepo). Until then the `detect` job
+# skips the build jobs so `main` stays green on a docs-only repo. As the capstone introduces its gates
+# (convergence fuzzers, multi-context E2E, perf/a11y), uncomment the matching lines below.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      has_code: ${{ steps.check.outputs.has_code }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          if [ -f package.json ]; then
+            echo "has_code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_code=false (docs-only repo; skipping build jobs)"
+            echo "has_code=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  verify:
+    needs: detect
+    if: needs.detect.outputs.has_code == 'true'
+    runs-on: ubuntu-latest
+    # Folio's tests are written to run WITHOUT live infra (pure CRDT/editor/sync logic + in-memory fakes);
+    # DB/WS wiring is verified via typecheck + build. Turn these on when a sprint needs them:
+    # services:
+    #   postgres:
+    #     image: postgres:16
+    #     env: { POSTGRES_PASSWORD: postgres }
+    #     ports: ['5432:5432']
+    #     options: >-
+    #       --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    #   redis:
+    #     image: redis:7
+    #     ports: ['6379:6379']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm turbo run typecheck test build
+      # Capstone gates — turn on as the sprints introduce them:
+      # - run: pnpm turbo run test:convergence   # S06 crdt-101 + S07/S13 Yjs-transport convergence fuzzers
+      # - run: pnpm turbo run test:e2e           # S03+ Playwright, incl. multi-context collaborative editing
+      # - run: pnpm turbo run perf:budget        # S12 large-doc / many-cursor budgets
+      # - run: pnpm turbo run test:a11y          # S14 axe-core gate
