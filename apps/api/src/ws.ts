@@ -1,7 +1,7 @@
 import type { Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { prisma } from "@folio/db";
-import { canView } from "@folio/shared";
+import { canView, canEdit } from "@folio/shared";
 import { docFromProseMirrorJSON, encodeState, type WireMessage } from "@folio/collab";
 import { YRooms } from "./yroom";
 import { memberRole } from "./lib/permissions";
@@ -37,17 +37,17 @@ export function attachWebSocketGateway(server: Server): WebSocketServer {
       return;
     }
 
-    // Permission check AT LOAD: resolve the member's effective role for this doc and reject anyone who
-    // can't even view it. Editing capability is enforced in the UI (viewers get a read-only editor).
+    // Permission check AT LOAD: resolve the member's effective role, reject non-viewers, and pass the
+    // member's EDIT capability into the room. S13 (flaw #5 harvest): the room re-checks that capability on
+    // every mutating message, and a demotion updates it via rooms.setCanEdit — authorization follows the
+    // permission change onto the wire, instead of trusting the connect-time snapshot forever.
     void (async () => {
-      if (memberId) {
-        const role = await memberRole(docId, memberId).catch(() => null);
-        if (role && !canView(role)) {
-          ws.close(1008, "forbidden");
-          return;
-        }
+      const role = memberId ? await memberRole(docId, memberId).catch(() => null) : null;
+      if (role && !canView(role)) {
+        ws.close(1008, "forbidden");
+        return;
       }
-      await rooms.join(docId, ws);
+      await rooms.join(docId, ws, role ? canEdit(role) : true);
     })();
 
     ws.on("message", (raw) => {
