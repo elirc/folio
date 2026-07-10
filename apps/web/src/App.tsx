@@ -1,65 +1,49 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { apiGet, apiSend } from "./lib/api";
+import { apiGet } from "./lib/api";
 import { Editor } from "./Editor";
+import { Tree } from "./Tree";
 
-interface DocRow {
+interface Crumb {
   id: string;
   title: string;
-  updatedAt: string;
 }
 
+/**
+ * S02 layout: tree sidebar + a breadcrumb + the (still-placeholder) editor. The breadcrumb is fed by the
+ * API's ancestor walk (`/breadcrumb`) — the same `ancestorsOf` pure function the tests cover, run server-
+ * side. The editor is unchanged from S01 (a labeled textarea); ProseMirror is S03.
+ */
 export function App() {
-  const [docs, setDocs] = useState<DocRow[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  const load = () =>
-    apiGet<DocRow[]>("/api/docs")
-      .then((rows) => {
-        setDocs(rows);
-        setSelected((s) => s ?? rows[0]?.id ?? null);
-      })
-      .catch((e: unknown) => setErr(String(e)));
+  const [crumbs, setCrumbs] = useState<Crumb[]>([]);
 
   useEffect(() => {
-    void load();
-  }, []);
-
-  const create = async () => {
-    const doc = await apiSend<{ id: string }>("/api/docs", "POST", { title: "Untitled" });
-    setSelected(doc.id);
-    await load();
-  };
+    if (!selected) return;
+    void apiGet<Crumb[]>(`/api/nodes/${selected}/breadcrumb`)
+      .then(setCrumbs)
+      .catch(() => setCrumbs([]));
+  }, [selected]);
 
   return (
-    <main style={{ maxWidth: 760, margin: "40px auto", padding: "0 16px" }}>
-      <h1 style={{ color: "#7c5cff" }}>Folio</h1>
-      {err && <p style={{ color: "salmon" }}>Couldn’t reach the API ({err}). Is it running on :3001?</p>}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "12px 0" }}>
-        {docs.map((d) => (
-          <button
-            key={d.id}
-            style={{ ...chip, ...(selected === d.id ? chipActive : {}) }}
-            onClick={() => setSelected(d.id)}
-          >
-            {d.title}
-          </button>
-        ))}
-        <button style={chip} onClick={() => void create()}>
-          + New doc
-        </button>
-      </div>
-      {selected && <Editor docId={selected} />}
-    </main>
+    <div style={{ display: "flex" }}>
+      <Tree selected={selected} onSelect={setSelected} />
+      <main style={{ flex: 1, maxWidth: 820, margin: "0 auto", padding: "24px 20px" }}>
+        <h1 style={{ color: "#7c5cff", marginTop: 0 }}>Folio</h1>
+        {selected ? (
+          <>
+            <nav style={breadcrumb}>
+              {crumbs.map((c) => (
+                <span key={c.id}>{c.title} / </span>
+              ))}
+            </nav>
+            <Editor docId={selected} />
+          </>
+        ) : (
+          <p style={{ color: "#7c8794" }}>Pick a doc from the tree, or create one.</p>
+        )}
+      </main>
+    </div>
   );
 }
 
-const chip: CSSProperties = {
-  background: "#14181d",
-  color: "#e6e9ef",
-  border: "1px solid #232a32",
-  borderRadius: 999,
-  padding: "6px 12px",
-  cursor: "pointer",
-};
-const chipActive: CSSProperties = { borderColor: "#7c5cff", color: "#7c5cff" };
+const breadcrumb: CSSProperties = { color: "#7c8794", fontSize: 12, margin: "0 0 12px" };
