@@ -75,6 +75,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@folio/crdt-101':
+        specifier: workspace:*
+        version: link:../../packages/crdt-101
       '@folio/editor':
         specifier: workspace:*
         version: link:../../packages/editor
