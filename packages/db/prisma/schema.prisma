@@ -52,8 +52,29 @@ model Node {
   updatedAt   DateTime  @updatedAt
   docState    DocState?
   acls        Acl[]
+  comments    Comment[]
 
   @@index([workspaceId, parentId])
+}
+
+// A comment anchored to a range of the document (S09). The anchor is an ENCODED Yjs RELATIVE POSITION — it
+// tracks the CRDT identity of the text, so it survives concurrent edits (unlike an absolute offset, flaw #3).
+// Threads are a self-relation (parentId); resolution is a flag. Deleted-anchor + cross-block edge cases are
+// hardened in S13 (a fuzzy-text fallback).
+model Comment {
+  id        String    @id @default(cuid())
+  nodeId    String
+  node      Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  author    String
+  body      String
+  anchor    String // base64 Yjs RelativePosition (start); ranges store start+end in JSON if needed
+  resolved  Boolean   @default(false)
+  parentId  String? // thread reply → another Comment
+  parent    Comment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentThread")
+  createdAt DateTime  @default(now())
+
+  @@index([nodeId, resolved])
 }
 
 // Per-node access grant. v1: a DIRECT role on a single node — it does NOT flow to descendants.
