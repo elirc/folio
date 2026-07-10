@@ -3,6 +3,7 @@ import { IndexeddbPersistence } from "y-indexeddb";
 import { encodeAwarenessUpdate, applyAwarenessUpdate } from "y-protocols/awareness";
 import {
   Provider,
+  Batcher,
   createAwareness,
   setLocalPresence,
   toB64,
@@ -78,10 +79,15 @@ export function createCollab(docId: string, user: PresenceUser): CollabSession {
   const provider = new Provider(ydoc, transport);
   provider.connect();
 
-  // Relay local awareness changes (presence/cursor) to peers — never into the doc.
+  // Relay local awareness changes (presence/cursor) to peers — never into the doc. S12: 50 cursors moving is
+  // a message + render STORM, so we COALESCE changes to one flush per animation frame (Batcher) instead of
+  // sending on every pointer move. The batch collects changed client ids; the frame flush sends them once.
+  const awarenessBatcher = new Batcher<number>((changed) => {
+    if (changed.length === 0) return;
+    wsSend({ type: "awareness", payload: toB64(encodeAwarenessUpdate(awareness, [...new Set(changed)])) });
+  });
   awareness.on("update", ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }) => {
-    const changed = [...added, ...updated, ...removed];
-    wsSend({ type: "awareness", payload: toB64(encodeAwarenessUpdate(awareness, changed)) });
+    for (const id of [...added, ...updated, ...removed]) awarenessBatcher.push(id);
   });
 
   const connect = () => {
