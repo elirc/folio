@@ -1,0 +1,33 @@
+// Prisma schema for Folio.
+// S01: the document skeleton — Node (a tree entry: doc | folder) + DocState (its content). The workspace
+// tree, ACL, and members arrive S02. DocState is PLAINTEXT for now; by S07 it becomes a Yjs update log +
+// periodic snapshots (ADR-0002's roadmap) — which is why the column is `text` on a `DocState` model, not
+// `content` on `Node`: it's built to grow into a CRDT changelog.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Node {
+  id        String    @id @default(cuid())
+  type      String    @default("doc") // doc | folder
+  title     String    @default("Untitled")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  docState  DocState?
+}
+
+model DocState {
+  id        String   @id @default(cuid())
+  nodeId    String   @unique
+  node      Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  // Plaintext today. S05 makes concurrent edits fight over this single string (naive LWW, broken on
+  // purpose); S07 replaces it with a Yjs update log (Bytes) + snapshots. The name survives the change.
+  text      String   @default("")
+  updatedAt DateTime @updatedAt
+}
