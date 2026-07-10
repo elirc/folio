@@ -1,29 +1,28 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { apiGet, apiSend } from "./lib/api";
 import { ProseMirrorView } from "./editor/ProseMirrorView";
+import { localUser, type SyncUser } from "./editor/syncClient";
 
 /**
- * The editor (S03). No longer a textarea — it's a real ProseMirror block editor (schema, slash menu, marks,
- * input rules) bound through <ProseMirrorView/>. Still SINGLE-USER: collaboration is deliberately absent
- * until we've felt its need (S05). The document is stored as ProseMirror JSON in `DocState.text`.
+ * The editor (S05). Now MULTIPLAYER — but naively: whole-document broadcast with last-write-wins (flaw #1,
+ * announced). Open this doc in two windows and edit both: watch one window's paragraph vanish. That data
+ * loss is the felt problem S06 (toy CRDT) and S07 (Yjs) exist to solve. Presence + cursors are best-effort
+ * and also break under concurrency (cursors jump — absolute offsets, ADR-0006).
  *
- * ⚠️ SAVE IS DEBOUNCED WHOLE-DOCUMENT. On every change we serialize the entire doc and PUT it. That's
- * perfectly fine for one person and *catastrophic* for two — it is literally last-write-wins on the whole
- * document. S05 will demonstrate exactly this failure with two windows; S07 replaces it with a Yjs update
- * log. This is the line you'll delete. (ADR-0002.)
+ * ⚠️ SAVE IS STILL DEBOUNCED WHOLE-DOCUMENT (persistence) AND BROADCAST IS WHOLE-DOCUMENT LWW (sync). Both
+ * are the same naïveté at two layers; S07 replaces both with a Yjs update log.
  */
 export function Editor({ docId }: { docId: string }) {
   const [initialJSON, setInitialJSON] = useState<unknown | undefined>(undefined);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [presence, setPresence] = useState<SyncUser[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const user = useMemo<SyncUser>(() => localUser(), []);
 
   useEffect(() => {
     setInitialJSON(undefined);
-    apiGet<{ text: string }>(`/api/docs/${docId}`).then((d) => {
-      // `text` holds ProseMirror JSON (a string) for S03 docs, or plaintext for older S01/S02 rows. Both
-      // are handled by docFromJSON downstream; here we just parse the JSON envelope if we can.
-      setInitialJSON(parseMaybeJSON(d.text));
-    });
+    setPresence([]);
+    apiGet<{ text: string }>(`/api/docs/${docId}`).then((d) => setInitialJSON(parseMaybeJSON(d.text)));
   }, [docId]);
 
   const scheduleSave = (json: unknown) => {
@@ -37,12 +36,28 @@ export function Editor({ docId }: { docId: string }) {
 
   return (
     <div style={{ marginTop: 4 }}>
-      {initialJSON !== undefined && <ProseMirrorView initialJSON={initialJSON} onChange={scheduleSave} />}
+      <div style={presenceBar}>
+        {presence.map((u) => (
+          <span key={u.id} title={u.name} style={{ ...avatar, background: u.color }}>
+            {u.name.slice(0, 1)}
+          </span>
+        ))}
+        {presence.length > 0 && <span style={{ color: "#7c8794", fontSize: 12 }}>{presence.length} here</span>}
+      </div>
+      {initialJSON !== undefined && (
+        <ProseMirrorView
+          docId={docId}
+          initialJSON={initialJSON}
+          user={user}
+          onChange={scheduleSave}
+          onPresence={setPresence}
+        />
+      )}
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 8 }}>
         {savedAt && <span style={{ color: "#8b93a1", fontSize: 12 }}>saved {savedAt}</span>}
         <span style={hint}>
-          “/” blocks · **bold** · # heading · - list · Tab to nest · ⌘. to fold · paste/drop an image.
-          Single-user until S05.
+          Multiplayer (naive, S05): open two windows and watch last-write-wins eat a paragraph. Real
+          convergence arrives S06–S07 (ADR-0002/0006).
         </span>
       </div>
     </div>
@@ -58,4 +73,16 @@ function parseMaybeJSON(text: string): unknown {
   }
 }
 
+const presenceBar: CSSProperties = { display: "flex", gap: 6, alignItems: "center", minHeight: 24, marginBottom: 6 };
+const avatar: CSSProperties = {
+  width: 22,
+  height: 22,
+  borderRadius: "50%",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "white",
+  fontSize: 12,
+  fontWeight: 600,
+};
 const hint: CSSProperties = { color: "#5b6572", fontSize: 12 };

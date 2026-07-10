@@ -84,3 +84,21 @@ body {
 .folio-editor .ProseMirror > *:hover > .folio-block-handle {
   opacity: 1;
 }
+/* S05 remote cursors (naive, absolute-offset — they drift under concurrent edits, by design). */
+.folio-remote-cursor {
+  position: relative;
+  border-left: 2px solid;
+  margin-left: -1px;
+  pointer-events: none;
+}
+.folio-remote-cursor-label {
+  position: absolute;
+  top: -1.3em;
+  left: -2px;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px 3px 3px 0;
+  color: white;
+  white-space: nowrap;
+}
