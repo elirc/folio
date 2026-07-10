@@ -37,6 +37,14 @@ export const insertDivider: Command = (state, dispatch) => {
   return true;
 };
 
+/** Insert an image block (S04). `src` is a StorageService URL returned by the upload endpoint. */
+export function insertImage(src: string, alt = ""): Command {
+  return (state, dispatch) => {
+    if (dispatch) dispatch(state.tr.replaceSelectionWith(s.nodes.image.create({ src, alt, blockId: makeBlockId() })));
+    return true;
+  };
+}
+
 /** Inline mark toggles. */
 export const toggleBold: Command = toggleMark(s.marks.strong);
 export const toggleItalic: Command = toggleMark(s.marks.em);

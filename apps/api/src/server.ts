@@ -6,6 +6,7 @@ import { healthRoutes } from "./routes/health";
 import { docRoutes } from "./routes/docs";
 import { nodeRoutes } from "./routes/nodes";
 import { aclRoutes } from "./routes/acl";
+import { uploadRoutes } from "./routes/uploads";
 
 /**
  * Build (but don't start) the app so tests can boot it in-process via `app.inject(...)`.
@@ -31,5 +32,6 @@ export function buildServer(): FastifyInstance {
   void app.register(docRoutes);
   void app.register(nodeRoutes);
   void app.register(aclRoutes);
+  void app.register(uploadRoutes);
   return app;
 }
