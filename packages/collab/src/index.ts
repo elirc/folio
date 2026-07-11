@@ -8,3 +8,4 @@ export * from "./history";
 export * from "./batch";
 export * from "./loadgen";
 export * from "./security";
+export * from "./extractText";

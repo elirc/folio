@@ -135,5 +135,8 @@ model DocState {
   // survived the whole journey — plaintext → PM-JSON → Yjs — exactly as ADR-0002 promised.
   text      String   @default("")
   yUpdate   Bytes? // the Yjs document state (S07). Grows as an update log until S12 adds compaction (flaw #4).
+  // S14: plain-text PROJECTION of the doc for full-text search — a derived read-path view, updated on change.
+  // The CRDT (yUpdate) is the source of truth; this is eventually-consistent (lags a keystroke, by design).
+  searchText String  @default("")
   updatedAt DateTime @updatedAt
 }
