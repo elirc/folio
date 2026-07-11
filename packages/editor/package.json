@@ -11,6 +11,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:a11y": "vitest run a11y",
     "lint": "eslint src"
   },
   "dependencies": {

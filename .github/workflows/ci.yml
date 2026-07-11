@@ -58,6 +58,7 @@ jobs:
       # Capstone gates — turned on as the sprints introduce them:
       - run: pnpm turbo run test:convergence     # S06 crdt-101 (+ S07/S13 Yjs-transport convergence fuzzers)
       - run: pnpm turbo run perf:budget          # S12 large-doc / many-cursor keystroke budget
+      - run: pnpm turbo run test:a11y            # S14 DOM-less accessibility rule gate
       - name: Secret scan (S13 — fast-forward)
         run: |
           if grep -rnE 'BEGIN [A-Z ]*PRIVATE KEY|AKIA[0-9A-Z]{16}|xox[baprs]-[0-9A-Za-z-]{10,}' apps packages; then

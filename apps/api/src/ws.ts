@@ -1,8 +1,9 @@
 import type { Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { prisma } from "@folio/db";
+import * as Y from "yjs";
 import { canView, canEdit } from "@folio/shared";
-import { docFromProseMirrorJSON, encodeState, type WireMessage } from "@folio/collab";
+import { docFromProseMirrorJSON, encodeState, extractPlainText, type WireMessage } from "@folio/collab";
 import { YRooms } from "./yroom";
 import { memberRole } from "./lib/permissions";
 
@@ -76,12 +77,22 @@ async function loadDocUpdate(docId: string): Promise<Uint8Array | null> {
 }
 
 function persistDocUpdate(docId: string, update: Uint8Array): void {
+  // Also refresh the search projection (S14): decode the state and extract plain text — the derived read-path
+  // view, updated on change. Eventually-consistent with the live doc, which is fine for search.
+  let searchText = "";
+  try {
+    const tmp = new Y.Doc();
+    Y.applyUpdate(tmp, update);
+    searchText = extractPlainText(tmp);
+  } catch {
+    /* leave searchText as-is on a decode error */
+  }
   // Fire-and-forget: keep the socket path non-blocking. A production build would debounce + snapshot.
   void prisma.docState
     .upsert({
       where: { nodeId: docId },
-      create: { nodeId: docId, yUpdate: Buffer.from(update) },
-      update: { yUpdate: Buffer.from(update) },
+      create: { nodeId: docId, yUpdate: Buffer.from(update), searchText },
+      update: { yUpdate: Buffer.from(update), searchText },
     })
     .catch(() => {
       /* best-effort persistence; the in-memory room remains the live source */

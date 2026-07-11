@@ -10,6 +10,8 @@ import { uploadRoutes } from "./routes/uploads";
 import { commentRoutes } from "./routes/comments";
 import { versionRoutes } from "./routes/versions";
 import { shareRoutes } from "./routes/share";
+import { searchRoutes } from "./routes/search";
+import { exportRoutes } from "./routes/export";
 
 /**
  * Build (but don't start) the app so tests can boot it in-process via `app.inject(...)`.
@@ -39,5 +41,7 @@ export function buildServer(): FastifyInstance {
   void app.register(commentRoutes);
   void app.register(versionRoutes);
   void app.register(shareRoutes);
+  void app.register(searchRoutes);
+  void app.register(exportRoutes);
   return app;
 }

@@ -38,6 +38,9 @@ importers:
       '@folio/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@folio/editor':
+        specifier: workspace:*
+        version: link:../../packages/editor
       '@folio/shared':
         specifier: workspace:*
         version: link:../../packages/shared

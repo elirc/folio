@@ -1,4 +1,6 @@
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3001";
+/** The API origin — exported for direct links (e.g. S14 export download URLs). */
+export const API_BASE = BASE;
 export const WS_URL = (import.meta.env.VITE_WS_URL as string | undefined) ?? "ws://localhost:3001/ws";
 
 // S02: single-workspace demo. Real workspace switching is out of scope for the capstone's teaching arc.

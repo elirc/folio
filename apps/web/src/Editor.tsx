@@ -5,6 +5,7 @@ import { CommentsPanel } from "./editor/CommentsPanel";
 import { VersionHistory } from "./editor/VersionHistory";
 import { SharePanel } from "./editor/SharePanel";
 import { localUser } from "./editor/collab";
+import { API_BASE } from "./lib/api";
 
 /**
  * The editor (S07). Real collaboration, at last. The document is a **Yjs CRDT** bound to ProseMirror; the
@@ -31,6 +32,9 @@ export function Editor({ docId }: { docId: string }) {
           </span>
         ))}
         {presence.length > 0 && <span style={{ color: "#7c8794", fontSize: 12 }}>{presence.length} here</span>}
+        {/* S14 export — a lossy projection; the API documents what each format drops. */}
+        <a style={exportLink} href={`${API_BASE}/api/docs/${docId}/export?format=markdown`}>⤓ .md</a>
+        <a style={exportLink} href={`${API_BASE}/api/docs/${docId}/export?format=html`}>⤓ .html</a>
         {/* Offline-first status: NOT a merge-conflict dialog — there are no conflicts to resolve (S08). */}
         <span style={{ ...statusPill, ...(online ? onlinePill : offlinePill) }}>
           {online ? "● online" : "○ offline — editing locally, will merge"}
@@ -92,3 +96,4 @@ const offlinePill: CSSProperties = { background: "rgba(224,165,75,.15)", color: 
 const tabs: CSSProperties = { display: "flex", gap: 4, borderLeft: "1px solid #232a32", padding: "0 12px 6px" };
 const tab: CSSProperties = { flex: 1, background: "transparent", color: "#7c8794", border: "1px solid #232a32", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontSize: 12 };
 const tabActive: CSSProperties = { color: "#7c5cff", borderColor: "#7c5cff" };
+const exportLink: CSSProperties = { fontSize: 11, color: "#7c8794", textDecoration: "none", border: "1px solid #232a32", borderRadius: 6, padding: "2px 6px" };
