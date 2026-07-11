@@ -9,3 +9,6 @@ export * from "./batch";
 export * from "./loadgen";
 export * from "./security";
 export * from "./extractText";
+export * from "./telemetry";
+export * from "./health";
+export * from "./backup";

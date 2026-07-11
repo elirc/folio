@@ -56,6 +56,39 @@ export class YRooms {
   }
 
   /**
+   * Graceful drain for a stateful deploy (S15). Persist every active document's final state, then evict all
+   * sockets with a "draining" close code so clients reconnect (to the new instance). 🔗 The hardest deploy in
+   * the curriculum — the server holds LIVE document state and open sockets — and it's survivable ONLY because
+   * of the S07/S08 reconnect machinery: a drained client re-syncs seamlessly on reconnect. Failure-handling
+   * and deploy-handling converge one final time: a system that survives a dropped connection survives a
+   * rolling deploy for free.
+   */
+  async drain(closeCode = 4001): Promise<void> {
+    for (const [docId, room] of this.rooms) {
+      this.onPersist(docId, Y.encodeStateAsUpdate(room.doc)); // flush final state before evicting
+      for (const s of room.sockets) {
+        try {
+          s.close(closeCode, "draining");
+        } catch {
+          /* socket already gone */
+        }
+      }
+    }
+    // Give persistence a tick to flush (best-effort in this teaching build).
+    await Promise.resolve();
+  }
+
+  /** How many documents are currently live in memory (an ops metric). */
+  get activeDocCount(): number {
+    return this.rooms.size;
+  }
+
+  /** Live connections for a document (an ops metric). */
+  connectionCount(docId: string): number {
+    return this.rooms.get(docId)?.sockets.size ?? 0;
+  }
+
+  /**
    * Re-authorize a socket mid-session. When a member's ACL changes (demoted to viewer), the server updates
    * their live socket's edit permission — so the NEXT update message they send is rejected. Harvest of flaw
    * #5: a WebSocket outlives a permission change, so authorization must follow the change onto the wire.
