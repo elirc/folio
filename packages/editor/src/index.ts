@@ -9,5 +9,7 @@ export * from "./move";
 export * from "./keyboard";
 export * from "./suggestions";
 export * from "./virtualize";
+export * from "./export";
+export * from "./a11y";
 export * from "./naiveSync";
 export * from "./state";

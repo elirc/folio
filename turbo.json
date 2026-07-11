@@ -12,6 +12,7 @@
     "test": {},
     "test:convergence": {},
     "perf:budget": {},
+    "test:a11y": {},
     "lint": {},
     "dev": {
       "cache": false,
