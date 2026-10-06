@@ -11,8 +11,9 @@ planted design debates, and inline review commentary.
 > [`docs/LEARNER-GUIDE.md`](docs/LEARNER-GUIDE.md), then read
 > [ADR-0002 — the CRDT roadmap](docs/adr/).
 
-**Course 6** of a larger curriculum (following Tracer, Relay, and others). Status: **scaffolding — Sprint
-1 in progress.** Sprints land as merged PRs; watch the milestones.
+**Course 6** of a larger curriculum (following Tracer, Relay, and others). Status (as of 2026-10-06):
+**complete** — all 15 sprints merged as squash-merged PRs #5–#75; see
+[`COURSE-RETROSPECTIVE.md`](COURSE-RETROSPECTIVE.md) and the post-course study path in the learner guide.
 
 ## The thesis: earn the abstraction three times
 - **S5** — build multiplayer *wrong* (last-write-wins). Feel the data loss.
@@ -35,7 +36,8 @@ planted design debates, and inline review commentary.
 - **Editor:** ProseMirror (schema-based rich text)
 - **CRDT (learning):** `packages/crdt-101` — hand-built sequence CRDT + fuzzer
 - **CRDT (production):** Yjs + `y-prosemirror`, a custom WebSocket provider
-- **API / transport:** Fastify + `ws` gateway + Redis pub/sub — `apps/api`
+- **API / transport:** Fastify + `ws` gateway — `apps/api` (Redis pub/sub for multi-instance fan-out was
+  planned and is provisioned in `packages/db/docker-compose.yml`, but no code publishes to it yet)
 - **Data:** PostgreSQL + Prisma (Yjs update log + periodic snapshots)
 - **Offline:** IndexedDB (y-indexeddb + custom)
 

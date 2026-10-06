@@ -37,6 +37,15 @@ This exact lesson appeared in three courses now — Tracer (channel authz), Rela
 capstone, learn this: **authorize the action, not the session that preceded it.**
 
 ## Residual / deferred
+
+> **Status note (2026-10-06, verified against `main` @ `af51546`):** some S13 mitigations above exist as
+> tested helpers but are not yet on the live server path. `safeApplyUpdate` and `verifyUpdateAuthorship`
+> (`packages/collab/src/security.ts`) are called only from `security.test.ts`; the server relay's protection
+> against malformed updates is the `try/catch` in `YRooms.handle` (`apps/api/src/yroom.ts`). The per-message
+> edit check (T3) is live, but `rooms.setCanEdit` is called only from `yroom.test.ts` — no ACL route pushes a
+> demotion to open sockets — and `apps/api/src/ws.ts` grants edit when the `member` query param is absent.
+> Treat T2 (size cap), T3 (demotion propagation), and T4 as open wiring work.
+
 - Rate-limiting per socket (DoS beyond size caps).
 - Audit log of access decisions.
 - End-to-end encryption of document content (out of scope; the server is trusted with plaintext).
